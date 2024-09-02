@@ -3,7 +3,7 @@ project(stl_debug VERSION 0.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 
-set(default_build_type "Debug")
+set(CMAKE_BUILD_TYPE "Debug")
 
 INCLUDE_DIRECTORIES(
     include
