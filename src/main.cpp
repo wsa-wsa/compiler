@@ -30,7 +30,7 @@ int main(int argc, char** argv){
     }
     // auto student1 = new Student();   //TODO: Error 1 : why?
     auto student1 = static_cast<Student*>(vec.back());
-    // check check1 = check(student);   //TODO: Error 2 : why?
+    // check check1 = check(vec.back());   //TODO: Error 2 : why?
     check check1 = check(student1);
     // LOG(DEBUG) << student1->print();
     // LOG(WARNING) << human.print();
