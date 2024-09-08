@@ -4,7 +4,6 @@
 #include <stdio.h>
 #include "Human.hpp"
 #include "Student.hpp"
-#include "logging.hpp"
 #include <vector>
 
 class check{
@@ -32,8 +31,6 @@ int main(int argc, char** argv){
     auto student1 = static_cast<Student*>(vec.back());
     // check check1 = check(vec.back());   //TODO: Error 2 : why?
     check check1 = check(student1);
-    // LOG(DEBUG) << student1->print();
-    // LOG(WARNING) << human.print();
 
     // std::list<int> list;
     // list.push_back(1);
