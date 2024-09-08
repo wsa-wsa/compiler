@@ -3,5 +3,5 @@ add_executable(
 )
 
 add_executable(
-    test_logging test_logging.cpp
+    test_logging test_logging.cpp logging.cpp
 )
