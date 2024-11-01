@@ -28,15 +28,13 @@ void yyerror(const char *s);
 syntax_tree_node *node(const char *node_name, int children_num, ...);
 %}
 
-/* Complete this definition.
-   Hint: See pass_node(), node(), and syntax_tree.h.
-         Use forward declaring. */
+/* TODO: Complete this definition. */
 %union {
      struct _syntax_tree_node * node;
 	 char * name;
 }
 
-/* Your tokens here. */
+/* TODO: Your tokens here. */
 %token <node> ERROR
 %token <node> ADD
 %token <node> SUB
@@ -48,7 +46,7 @@ syntax_tree_node *node(const char *node_name, int children_num, ...);
 %token <node> GTE
 %token <node> EQ
 %token <node> NEQ
-%token <node> ASSIGN
+%token <node> ASSIN
 %token <node> SEMICOLON
 %token <node> COMMA
 %token <node> LPARENTHESE
@@ -65,8 +63,8 @@ syntax_tree_node *node(const char *node_name, int children_num, ...);
 %token <node> WHILE
 %token <node> IDENTIFIER
 %token <node> INTEGER
-%token <node> FLOAT             // 这个token 对应float 关键字
-%token <node> FLOATPOINT        // 这个token 对应 浮点数值, 如果分不清的同学可以参考type-specifier的文法和对应产生式规则
+%token <node> FLOAT
+%token <node> FLOATPOINT	// 这个是 float 类型的 token
 //%token <node> EOL
 //%token <node> BLANK
 //%token <node> COMMENT
@@ -76,7 +74,7 @@ syntax_tree_node *node(const char *node_name, int children_num, ...);
 %start program
 
 %%
-/* Your rules here. TA has completed many */
+/* TODO: Your rules here. */
 
 program : 	declaration-list {$$ = node( "program", 1, $1); gt->root = $$;}
 		;
@@ -122,8 +120,91 @@ local-declarations 	: 	local-declarations var-declaration {$$ = node( "local-dec
 
 statement-list 	: 	statement-list statement {$$ = node( "statement-list", 2, $1, $2);}
 | 	{$$ = node( "statement-list",0);}
-                    ;
-// TODO: phase1. 补充其他的文法产生式逻辑
+				;
+
+statement 	: 	expression-stmt {$$ = node( "statement", 1, $1);}
+            | 	compound-stmt {$$ = node( "statement", 1, $1);}
+			| 	selection-stmt {$$ = node( "statement", 1, $1);}
+			| 	iteration-stmt {$$ = node( "statement", 1, $1);}
+			| 	return-stmt {$$ = node( "statement", 1, $1);}
+			;
+
+expression-stmt : 	expression SEMICOLON {$$ = node( "expression-stmt", 2, $1, $2);}
+				| 	SEMICOLON {$$ = node( "expression-stmt", 1, $1);}
+				;
+
+selection-stmt 	: 	IF LPARENTHESE expression RPARENTHESE statement {$$ = node( "selection-stmt", 5, $1, $2, $3, $4, $5);}
+				| 	IF LPARENTHESE expression RPARENTHESE statement ELSE statement {$$ = node( "selection-stmt", 7, $1, $2, $3, $4, $5, $6, $7);}
+				;
+
+iteration-stmt 	: 	WHILE LPARENTHESE expression RPARENTHESE statement {$$ = node( "iteration-stmt", 5, $1, $2, $3, $4, $5);}
+				;
+
+return-stmt : 	RETURN SEMICOLON {$$ = node( "return-stmt", 2, $1, $2);}
+			| 	RETURN expression SEMICOLON {$$ = node( "return-stmt", 3, $1, $2, $3);}
+			;
+
+expression 	: 	var ASSIN expression {$$ = node( "expression", 3, $1, $2, $3);}
+			| 	simple-expression {$$ = node( "expression", 1, $1);}
+			;
+
+var : 	IDENTIFIER {$$ = node( "var", 1, $1);}
+    | 	IDENTIFIER LBRACKET expression RBRACKET {$$ = node( "var", 4, $1, $2, $3, $4);}
+    ;
+
+simple-expression 	: 	additive-expression relop additive-expression {$$ = node( "simple-expression", 3, $1, $2, $3);}
+					| 	additive-expression {$$ = node( "simple-expression", 1, $1);}
+					;
+
+relop 	: 	LT {$$ = node( "relop", 1, $1);}
+		| 	LTE {$$ = node( "relop", 1, $1);}
+		| 	GT {$$ = node( "relop", 1, $1);}
+		| 	GTE {$$ = node( "relop", 1, $1);}
+		| 	EQ {$$ = node( "relop", 1, $1);}
+		| 	NEQ {$$ = node( "relop", 1, $1);}
+		;
+
+additive-expression : 	additive-expression addop term  {$$ = node( "additive-expression", 3, $1, $2, $3);}
+					| 	term {$$ = node( "additive-expression", 1, $1);}
+					;
+
+addop 	: 	ADD {$$ = node( "addop", 1, $1);}
+		|	SUB {$$ = node( "addop", 1, $1);}
+		;
+
+term 	: 	term mulop factor {$$ = node( "term", 3, $1, $2, $3);}
+		| 	factor {$$ = node( "term", 1, $1);}
+		;
+
+mulop 	: 	MUL {$$ = node( "mulop", 1, $1);}
+		|	DIV {$$ = node( "mulop", 1, $1);}
+		;
+
+factor 	: 	LPARENTHESE expression RPARENTHESE {$$ = node( "factor", 3, $1, $2, $3);}
+		|	var {$$ = node( "factor", 1, $1);}
+		|	call {$$ = node( "factor", 1, $1);}
+		|	integer {$$ = node( "factor", 1, $1);}
+		|	float {$$ = node( "factor", 1, $1);}
+		;
+
+integer 	: 	INTEGER {$$ = node( "integer", 1, $1);}
+		;
+
+float 	: 	FLOATPOINT {$$ = node( "float", 1, $1);}
+		;
+
+call 	: 	IDENTIFIER LPARENTHESE args RPARENTHESE {$$ = node( "call", 4, $1, $2, $3, $4);}
+		;
+
+args 	: 	arg-list {$$ = node( "args", 1, $1);}
+| 	{$$ = node( "args", 0);}
+		;
+
+arg-list 	: 	arg-list COMMA expression {$$ = node( "arg-list", 3, $1, $2, $3);}
+			| 	expression {$$ = node( "arg-list", 1, $1);}
+			;
+
+
 
 %%
 
@@ -164,7 +245,7 @@ syntax_tree_node *node(const char *name, int children_num, ...)
 {
     syntax_tree_node *p = new_syntax_tree_node(name);
     syntax_tree_node *child;
-    // 这里表示 epsilon结点是通过 children_num == 0 来判断的
+	// 这里表示 epsilon结点是通过 children_num == 0 来判断的
     if (children_num == 0) {
         child = new_syntax_tree_node("epsilon");
         syntax_tree_add_child(p, child);
