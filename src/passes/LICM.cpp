@@ -43,10 +43,12 @@ void LoopInvariantCodeMotion::traverse_loop(std::shared_ptr<Loop> loop) {
     }
     run_on_loop(loop);
 }
-    // 1. 遍历当前循环及其子循环的所有指令
-    // 2. 收集所有指令到loop_instructions中
-    // 3. 检查store指令是否修改了全局变量，如果是则添加到updated_global中
-    // 4. 检查是否包含非纯函数调用，如果有则设置contains_impure_call为true
+
+// TODO: 实现collect_loop_info函数
+// 1. 遍历当前循环及其子循环的所有指令
+// 2. 收集所有指令到loop_instructions中
+// 3. 检查store指令是否修改了全局变量，如果是则添加到updated_global中
+// 4. 检查是否包含非纯函数调用，如果有则设置contains_impure_call为true
 void LoopInvariantCodeMotion::collect_loop_info(
     std::shared_ptr<Loop> loop,
     std::set<Value *> &loop_instructions,
