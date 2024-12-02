@@ -51,6 +51,8 @@ void LoopDetection::discover_loop_and_sub_loops(BasicBlock *bb, BBset &latches,
              * 2. 更新bb_to_loop_映射
              * 3. 将bb的所有前驱加入工作表
              */
+        throw std::runtime_error("Lab4: 你有一个TODO需要完成！");
+        
         }
         // TODO-2: 处理已属于其他循环的节点
         else if (bb_to_loop_[bb] != loop) {
@@ -63,6 +65,9 @@ void LoopDetection::discover_loop_and_sub_loops(BasicBlock *bb, BBset &latches,
              *    - 添加子循环
              * 5. 将子循环header的前驱加入工作表
              */
+
+        throw std::runtime_error("Lab4: 你有一个TODO需要完成！");
+
         }
     }
 }
