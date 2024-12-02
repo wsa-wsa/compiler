@@ -22,7 +22,7 @@ check_return_value() {
 
 usage() {
 	cat <<JIANMU
-Usage: $0 test-type
+Usage: $0 [test-type]
 test-type: 'licm' or 'mem2reg'
 JIANMU
 	exit 0
