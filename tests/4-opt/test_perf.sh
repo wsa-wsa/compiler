@@ -4,7 +4,7 @@ project_dir=$(realpath ../../)
 io_dir=$(realpath "$project_dir"/src/io)
 output_dir=output
 suffix=cminus
-flag = ""
+flag=""
 LOG=log.txt
 
 check_return_value() {
@@ -30,12 +30,12 @@ JIANMU
 [ $# -lt 1 ] && usage
 if [ "$1" == "licm" ]; then
     licm=true
-    nfalg = "-mem2reg"
-    flag = "-mem2reg -licm"
+    nfalg="-mem2reg"
+    flag="-mem2reg -licm"
 elif [ "$1" == "mem2reg" ]; then
     licm=false
-    nflag = ""
-    flag = "-mem2reg"
+    nflag=""
+    flag="-mem2reg"
 else
     usage
 fi
