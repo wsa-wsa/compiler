@@ -22,7 +22,8 @@ check_return_value() {
 
 usage() {
 	cat <<JIANMU
-Usage: $0 [licm | mem2reg]
+Usage: $0 test-type
+test-type: 'licm' or 'mem2reg'
 JIANMU
 	exit 0
 }
@@ -30,7 +31,7 @@ JIANMU
 [ $# -lt 1 ] && usage
 if [ "$1" == "licm" ]; then
     licm=true
-    nfalg="-mem2reg"
+    nflag="-mem2reg"
     flag="-mem2reg -licm"
 elif [ "$1" == "mem2reg" ]; then
     licm=false

@@ -9,7 +9,8 @@ LOG=log.txt
 
 usage() {
 	cat <<JIANMU
-Usage: $0 [path-to-testcases] [type]
+Usage: $0 [test-stage] [path-to-testcases] [type]
+test-stage: 'licm' or 'mem2reg'
 path-to-testcases: './testcases/functional-cases' or '../testcases_general' or 'self made cases'
 type: 'debug' or 'test', debug will output .ll file
 JIANMU
@@ -30,16 +31,26 @@ check_return_value() {
 }
 
 # check arguments
-[ $# -lt 2 ] && usage
-if [ "$2" == "debug" ]; then
+[ $# -lt 3 ] && usage
+if [ "$3" == "debug" ]; then
 	debug_mode=true
-elif [ "$2" == "test" ]; then
+elif [ "$3" == "test" ]; then
 	debug_mode=false
 else
 	usage
 fi
 
-test_dir=$1
+if [ "$1" == "licm" ]; then
+    licm=true
+    flag="-mem2reg -licm"
+elif [ "$1" == "mem2reg" ]; then
+    licm=false
+    flag="-mem2reg"
+else
+    usage
+fi
+
+test_dir=$2
 testcases=$(ls "$test_dir"/*."$suffix" | sort -V)
 check_return_value $? 0 "PATH" "unable to access to '$test_dir'" || exit 1
 
@@ -75,10 +86,10 @@ for case in $testcases; do
 	echo -n "$case_base_name..."
 	# if debug mode on, generate .ll also
 	if [ $debug_mode = true ]; then
-		bash -c "cminusfc -mem2reg -emit-llvm $case -o $ll_file" >>$LOG 2>&1
+		bash -c "cminusfc $flag -emit-llvm $case -o $ll_file" >>$LOG 2>&1
 	fi
 	# cminusfc compile to .s
-	bash -c "cminusfc -S -mem2reg $case -o $asm_file" >>$LOG 2>&1
+	bash -c "cminusfc -S $flag $case -o $asm_file" >>$LOG 2>&1
 	check_return_value $? 0 "CE" "cminusfc compiler error" || continue
 
 	# gcc compile asm to executable
