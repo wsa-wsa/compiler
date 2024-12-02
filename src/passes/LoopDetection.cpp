@@ -63,7 +63,8 @@ void LoopDetection::discover_loop_and_sub_loops(BasicBlock *bb, BBset &latches,
              * 4. 建立循环嵌套关系：
              *    - 设置父循环
              *    - 添加子循环
-             * 5. 将子循环header的前驱加入工作表
+             * 5. 将子循环的所有基本快加入到父循环中
+             * 6. 将子循环header的前驱加入工作表
              */
 
         throw std::runtime_error("Lab4: 你有一个TODO需要完成！");
