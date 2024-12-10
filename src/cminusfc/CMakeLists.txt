@@ -9,6 +9,7 @@ target_link_libraries(
     IR_lib
     common
     syntax
+    codegen
     stdc++fs
 )
 
