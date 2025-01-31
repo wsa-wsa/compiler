@@ -10,7 +10,8 @@
 
 #include <map>
 #include <memory>
-
+#include <vector>
+// 使用hashmap进行标记
 class Scope {
   public:
     // enter a new scope
@@ -41,6 +42,11 @@ class Scope {
         assert(false && "Name not found in scope");
 
         return nullptr;
+    }
+
+    bool currentFind(const std::string& name){
+        auto& current = inner.back();
+        return current.find(name)!=current.end();
     }
 
   private:
@@ -107,7 +113,9 @@ class CminusfBuilder : public ASTVisitor {
 
     struct {
         // function that is being built
+        // 正在构建的函数
         Function *func = nullptr;
+        std::map<std::string, Function*> func_map;
         // TODO: you should add more fields to store state
     } context;
 };
