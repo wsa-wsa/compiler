@@ -6,7 +6,12 @@
 #include "Type.hpp"
 #include "Value.hpp"
 #include "ast.hpp"
+#include <cassert>
 #include <cstddef>
+#include <cstdint>
+#include <iostream>
+#include <ostream>
+#include <string>
 #include <vector>
 
 #define CONST_FP(num) ConstantFP::get((float)num, module.get())
@@ -101,9 +106,17 @@ Value* CminusfBuilder::visit(ASTVarDeclaration &node) {
             }
         }
         else {
-            auto aAlloca = builder->create_alloca(FLOAT_T);
-            aAlloca->set_name(node.id);
-            scope.push(node.id, aAlloca);
+            if(scope.in_global()){
+                // 创建 0 常数类实例化，用于全局变量的初始化（目前全局变量仅支持初始化为 0）
+                auto initializer = ConstantZero::get(FLOAT_T, module.get());
+                // 为全局数组变量分配空间。参数解释：名字 name，所属 module，待分配空间类型
+                // type，标志全局变量是否有 const 限定（cminus 中全是 false），初始化值
+                auto array = GlobalVariable::create(node.id, module.get(), FLOAT_T, false, initializer);
+                scope.push(node.id, array);
+            }else {
+                auto aAlloca = builder->create_alloca(FLOAT_T);
+                scope.push(node.id, aAlloca);
+            }
         }
     }
     return nullptr;
@@ -136,6 +149,7 @@ Value* CminusfBuilder::visit(ASTFunDeclaration &node) {
     scope.push(node.id, func);
     context.func = func;
     context.func_map[node.id] = func;
+    context.idx = 0;
     auto funBB = BasicBlock::create(module.get(), "entry", func);
     builder->set_insert_point(funBB);
     scope.enter();
@@ -188,7 +202,7 @@ Value* CminusfBuilder::visit(ASTCompoundStmt &node) {
     // TODO: This function is not complete.
     // You may need to add some code here
     // to deal with complex statements. 
-    
+    scope.enter();
     for (auto &decl : node.local_declarations) {
         auto dValue = decl->accept(*this);
         scope.push(decl->id, dValue);
@@ -199,6 +213,7 @@ Value* CminusfBuilder::visit(ASTCompoundStmt &node) {
         if (builder->get_insert_block()->is_terminated())
             break;
     }
+    scope.exit();
     return nullptr;
 }
 
@@ -214,14 +229,25 @@ Value* CminusfBuilder::visit(ASTExpressionStmt &node) {
 Value* CminusfBuilder::visit(ASTSelectionStmt &node) {
     // TODO: This function is empty now.
     // Add some code here.
-    auto loopBB = BasicBlock::create(module.get(), "loop", context.func);
-    auto trueBB = BasicBlock::create(module.get(), "true", context.func);
-    auto falseBB = BasicBlock::create(module.get(), "falseBB", context.func);
-    auto otherBB = BasicBlock::create(module.get(), "other", context.func);
+    std::string idx = std::to_string(context.get_idx());
+    auto loopBB = BasicBlock::create(module.get(), "loop"+idx, context.func);
+    auto trueBB = BasicBlock::create(module.get(), "true"+idx, context.func);
+    auto falseBB = BasicBlock::create(module.get(), "falseBB"+idx, context.func);
+    auto otherBB = BasicBlock::create(module.get(), "other"+idx, context.func);
     builder->create_br(loopBB);
     builder->set_insert_point(loopBB);
     auto eValue = node.expression->accept(*this);
-    builder->create_cond_br(eValue, trueBB, falseBB);
+    Value * cond = nullptr;
+    if (eValue->get_type()!=INT1_T) {
+        if(eValue->get_type()==INT32_T){
+            cond = builder->create_icmp_ne(eValue, CONST_INT(0));
+        }else {
+            cond = builder->create_fcmp_ne(eValue, CONST_FP(0.));
+        }
+    }else {
+        cond = eValue;
+    }
+    builder->create_cond_br(cond, trueBB, falseBB);
     builder->set_insert_point(trueBB);
     scope.enter();
     node.if_statement->accept(*this);
@@ -245,18 +271,29 @@ Value* CminusfBuilder::visit(ASTSelectionStmt &node) {
 Value* CminusfBuilder::visit(ASTIterationStmt &node) {
     // TODO: This function is empty now.
     // Add some code here.
-    auto whileBB = BasicBlock::create(module.get(), "while", context.func);
-    auto trueBB  = BasicBlock::create(module.get(), "true", context.func);
-    auto falseBB = BasicBlock::create(module.get(), "false", context.func);
+    std::string idx = std::to_string(context.get_idx());
+    auto whileBB = BasicBlock::create(module.get(), "while"+idx, context.func);
+    auto trueBB  = BasicBlock::create(module.get(), "true"+idx, context.func);
+    auto falseBB = BasicBlock::create(module.get(), "false"+idx, context.func);
     builder->create_br(whileBB);
     builder->set_insert_point(whileBB);
-    scope.enter();
     auto eValue = node.expression->accept(*this);
-    scope.exit();
-    builder->create_cond_br(eValue, trueBB, falseBB);
+    Value * cond = nullptr;
+    if(eValue->get_type()==INT32_T){
+        cond = builder->create_icmp_ne(eValue, CONST_INT(0));
+    }else if(eValue->get_type()==FLOAT_T){
+        cond = builder->create_fcmp_ne(eValue, CONST_FP(0.));
+    }else {
+        cond = eValue;
+    }
+    builder->create_cond_br(cond, trueBB, falseBB);
     builder->set_insert_point(trueBB);
+    scope.enter();
     node.statement->accept(*this);
-    builder->create_br(whileBB);
+    if (not builder->get_insert_block()->is_terminated()){
+        builder->create_br(whileBB);
+    }
+    scope.exit();
     builder->set_insert_point(falseBB);
     return nullptr;
 }
@@ -269,7 +306,23 @@ Value* CminusfBuilder::visit(ASTReturnStmt &node) {
         // TODO: The given code is incomplete.
         // You need to solve other return cases (e.g. return an integer).
         auto ret = node.expression->accept(*this);
-        builder->create_ret(ret);
+        // 要保证ret值和函数返回值一致
+        if (context.func->get_return_type()!=ret->get_type()) {
+            if(context.func->get_return_type()==INT32_T){
+                if(ret->get_type()==INT1_T){
+                    auto xret = builder->create_zext(ret, INT32_T);
+                    builder->create_ret(xret);
+                }else {
+                    auto xret = builder->create_fptosi(ret, INT32_T);
+                    builder->create_ret(xret);
+                }
+            }else{
+                auto xret = builder->create_sitofp(ret, FLOAT_T);
+                builder->create_ret(xret);
+            }
+        }else{
+            builder->create_ret(ret);
+        }
     }
     return nullptr;
 }
@@ -281,7 +334,7 @@ Value* CminusfBuilder::visit(ASTVar &node) {
     bool isarray = false;
     if(aAlloca->is<GlobalVariable>()){
         auto ptr = aAlloca->as<GlobalVariable>();
-        if(ptr->get_type()->is_pointer_type()){
+        if(ptr->get_type()->get_pointer_element_type()->is_array_type()){
             isarray = true;
         }
     }else if (aAlloca->is<AllocaInst>()) {
@@ -294,11 +347,32 @@ Value* CminusfBuilder::visit(ASTVar &node) {
         if(!isarray){
             auto eValue = node.expression->accept(*this);
             auto aPointer = builder->create_load(aAlloca);
-            auto aGEP = builder->create_gep(aPointer, {eValue});
+            Value *aGEP = nullptr;
+            if(eValue->get_type()==INT32_T||eValue->get_type()==INT1_T)
+                aGEP = builder->create_gep(aPointer, {eValue});
+            else
+                aGEP = builder->create_gep(aPointer, {builder->create_fptosi(eValue, INT32_T)});
             return builder->create_load(aGEP);
         }else{
             auto eValue = node.expression->accept(*this);
-            auto aGEP = builder->create_gep(aAlloca, {CONST_INT(0), eValue});
+            Value * index = nullptr;
+            if(eValue->get_type()==INT32_T||eValue->get_type()==INT1_T)
+                index = eValue;
+            else
+                index = builder->create_fptosi(eValue, INT32_T);
+            std::string idx = std::to_string(context.get_idx());
+            auto valid = BasicBlock::create(module.get(), "valid"+idx, context.func);
+            auto negative = BasicBlock::create(module.get(), "neg"+idx, context.func);
+            auto check_index = builder->create_icmp_lt(index, CONST_INT(0));
+            builder->create_cond_br(check_index, negative, valid);
+            builder->set_insert_point(negative);
+            auto func = scope.find("neg_idx_except");
+            builder->create_call(func, {});
+            if(not builder->get_insert_block()->is_terminated()){
+                builder->create_br(valid);
+            }
+            builder->set_insert_point(valid);
+            auto aGEP = builder->create_gep(aAlloca, {CONST_INT(0), index});
             return builder->create_load(aGEP);
         }
     }
@@ -312,14 +386,14 @@ Value* CminusfBuilder::visit(ASTVar &node) {
 Value* CminusfBuilder::visit(ASTAssignExpression &node) {
     // TODO: This function is empty now.
     // Add some code here.
-    auto eValue  = node.expression->accept(*this);
     auto aAlloca = scope.find(node.var->id);
+    auto eValue  = node.expression->accept(*this);
     Value* address = nullptr;
     if(node.var->expression){
         bool isarray = false;
         if(aAlloca->is<GlobalVariable>()){
             auto ptr = aAlloca->as<GlobalVariable>();
-            if(ptr->get_type()->is_pointer_type()){
+            if(ptr->get_type()->get_pointer_element_type()->is_array_type()){
                 isarray = true;
             }
         }else if(aAlloca->is<AllocaInst>()){
@@ -337,14 +411,95 @@ Value* CminusfBuilder::visit(ASTAssignExpression &node) {
             address = builder->create_gep(aPointer, {e});
         }else{
             auto e = node.var->expression->accept(*this);
-            address = builder->create_gep(aAlloca, {CONST_INT(0), e});
+            Value * index = nullptr;
+            if(e->get_type()==INT32_T||e->get_type()==INT1_T)
+                index = e;
+            else
+                index = builder->create_fptosi(e, INT32_T);
+            std::string idx = std::to_string(context.get_idx());
+            auto valid = BasicBlock::create(module.get(), "valid"+idx, context.func);
+            auto negative = BasicBlock::create(module.get(), "neg"+idx, context.func);
+            auto check_index = builder->create_icmp_lt(index, CONST_INT(0));
+            builder->create_cond_br(check_index, negative, valid);
+            builder->set_insert_point(negative);
+            auto func = scope.find("neg_idx_except");
+            builder->create_call(func, {});
+            if(not builder->get_insert_block()->is_terminated()){
+                builder->create_br(valid);
+            }
+            builder->set_insert_point(valid);
+            address = builder->create_gep(aAlloca, {CONST_INT(0), index});
         }
 
     }else {
         address= aAlloca;
     }
-    builder->create_store(eValue, address);
-    return eValue;
+    if(address->is<AllocaInst>()){
+        auto ptr = address->as<AllocaInst>();
+        if(eValue->get_type()!=ptr->get_alloca_type()){
+            if(ptr->get_alloca_type()==INT32_T){
+                if (eValue->get_type()==INT1_T) {
+                    builder->create_store(builder->create_zext(eValue, INT32_T), address);
+                }else {
+                    builder->create_store(builder->create_fptosi(eValue, INT32_T), address);
+                }
+            }else {
+                builder->create_store(builder->create_sitofp(eValue, FLOAT_T), address);
+            }
+        }else {
+            builder->create_store(eValue, address);
+        }
+    }else if (address->is<GlobalVariable>()) {
+        auto ptr = address->as<GlobalVariable>();
+        Type * type = nullptr;
+        if(ptr->get_type()->get_pointer_element_type()->is_int32_type()){
+            type = INT32_T;
+        }else if (ptr->get_type()->get_pointer_element_type()->is_int1_type()) {
+            type = INT1_T;
+        }else if (ptr->get_type()->get_pointer_element_type()->is_float_type()) {
+            type = FLOAT_T;
+        }else {
+            assert(1==0);
+        }
+        if(type!=eValue->get_type()){
+            if(type==INT32_T){
+                if (eValue->get_type()==INT1_T) {
+                    builder->create_store(builder->create_zext(eValue, INT32_T), address);
+                }else {
+                    builder->create_store(builder->create_fptosi(eValue, INT32_T), address);
+                }
+            }else {
+                builder->create_store(builder->create_sitofp(eValue, FLOAT_T), address);
+            }
+        }else {
+            builder->create_store(eValue, address);
+        }
+    }else if(address->is<GetElementPtrInst>()){
+        auto ptr = address->as<GetElementPtrInst>();
+        if(ptr->get_type()==INT32PTR_T){
+            if(eValue->get_type()!=INT32_T){
+                if(eValue->get_type()==INT1_T){
+                    builder->create_store(builder->create_zext(eValue, INT32_T), address);
+                }else if (eValue->get_type()==FLOAT_T) {
+                    builder->create_store(builder->create_fptosi(eValue, INT32_T), address);
+                }
+            }else {
+                builder->create_store(eValue, address);
+            }
+        }else if (ptr->get_type()==FLOATPTR_T) {
+            if(eValue->get_type()!=FLOAT_T){
+                builder->create_store(builder->create_sitofp(eValue, FLOAT_T), address);
+            }else {
+                builder->create_store(eValue, address);
+            }
+        }else {
+            std::cout<<module->print()<<std::endl;
+            assert(1==0);
+        }
+    }else {
+        builder->create_store(eValue, address);
+    }
+    return builder->create_load(address);
 }
 
 Value* CminusfBuilder::visit(ASTSimpleExpression &node) {
@@ -358,8 +513,14 @@ Value* CminusfBuilder::visit(ASTSimpleExpression &node) {
             auto rtValue = node.additive_expression_r->accept(*this);
             
             if(ltValue->get_type()->is_integer_type()&&rtValue->get_type()->is_integer_type()){
-                lValue = ltValue;
-                rValue = rtValue;
+                if(ltValue->get_type()==INT1_T)
+                    lValue = builder->create_zext(ltValue, INT32_T);
+                else
+                    lValue = ltValue;
+                if(rtValue->get_type()==INT1_T)
+                    rValue = builder->create_zext(rtValue, INT32_T);
+                else
+                    rValue = rtValue;
                 highest = INT32_T;
             }else{
                 if(ltValue->get_type()->is_integer_type()){
@@ -514,19 +675,28 @@ Value* CminusfBuilder::visit(ASTCall &node) {
     // Add some code here.
     auto call = scope.find(node.id);
     scope.enter();
-    Function* func = context.func_map[node.id];
-    //获得参数
-    // for(auto& it: func->get_args()){
-
-    // }
+    // Function* func = context.func_map[node.id];
+    auto func = call->as<Function>();
+    auto func_type = func->get_function_type();
     assert(call->get_type()->is_function_type());
     std::vector<Value*>aVector;
-    func->get_args();
     for(auto& arg: node.args){
         auto aValue = arg->accept(*this);
         aVector.push_back(aValue);
     }
-
+    for (unsigned i = 0; i < aVector.size(); i++) {
+        if(func_type->get_param_type(i) != aVector[i]->get_type()){
+            if(func_type->get_param_type(i)==FLOAT_T){
+                aVector[i] = builder->create_sitofp(aVector[i], FLOAT_T);
+            }else{
+                if(aVector[i]->get_type()==INT1_T){
+                    aVector[i] = builder->create_zext(aVector[i], INT32_T);
+                }else {
+                    aVector[i] = builder->create_fptosi(aVector[i], INT32_T);
+                }
+            }
+        }
+    }
     auto retValue  = builder->create_call(call, aVector);
     scope.exit();
     return retValue;

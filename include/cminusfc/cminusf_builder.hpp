@@ -8,8 +8,10 @@
 #include "Type.hpp"
 #include "ast.hpp"
 
+#include <cstdint>
 #include <map>
 #include <memory>
+#include <string>
 #include <vector>
 // 使用hashmap进行标记
 class Scope {
@@ -116,6 +118,11 @@ class CminusfBuilder : public ASTVisitor {
         // 正在构建的函数
         Function *func = nullptr;
         std::map<std::string, Function*> func_map;
+        // 每个标签的唯一标识id号
+        std::uint32_t idx;
         // TODO: you should add more fields to store state
+        std::uint32_t get_idx(){
+            return idx++;
+        }
     } context;
 };
